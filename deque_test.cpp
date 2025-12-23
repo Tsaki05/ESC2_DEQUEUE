@@ -5,9 +5,9 @@ struct Deque{
 
 public:
 
-    int *_valors;
     int _mida;
     int _ultim;
+    int *_valors;
 
 private:
 
@@ -150,8 +150,7 @@ extern void pop_front(Deque &d);
 extern void pop_back(Deque &d);
 */
 
-extern "C" void push_back(Deque &d, const int &k);
-extern "C" int sum(int a, int b);
+extern "C" void push_back(Deque &d, int k);
 
 int main(){
 
