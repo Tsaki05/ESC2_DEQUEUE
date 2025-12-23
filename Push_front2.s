@@ -88,9 +88,9 @@ pop_front_asm:
     
     # Càrrega dels membres de l'estructura Deque
     # _valors(0), _mida(8), _ultim(12)
-    movq    (%rdi), %rbx        # rbx = _valors
-    movl    12(%rdi), %eax      # eax = _ultim
-    movl    8(%rdi), %ecx       # ecx = _mida
+    movq    (%rdi), %rbx        # rbx = _valors (punter a l'array)
+    movl    12(%rdi), %r12d     # r12d = _ultim (nombre d'elements)
+    movl    8(%rdi), %eax       # eax = _mida (capacitat màxima)
     
     # Comprovar si el deque està buit
     testl   %r12d, %r12d        # _ultim == 0?
