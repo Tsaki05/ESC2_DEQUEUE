@@ -1,180 +1,183 @@
-#Versio optimitzada "manualment"
-_ZN5Deque10push_frontERKi_opt:
-    # rdi = this, rsi = &k
-    # PROLOGUE SIMPLIFICADO
+# deque_asm_corregit.s
+# Implementació de les funcions de Deque en Assembly x86-64
+# Sistema: Linux x86-64 (System V ABI)
+# Registres: rdi = this (punter a Deque), esi/rsi = valor/paràmetre
+
+.data
+
+.bss
+
+.text
+
+# =================================================================
+# Funció: push_front_asm
+# Paràmetres: rdi = punter a Deque, esi = valor k
+# Descripció: Insereix un element al davant del deque
+# =================================================================
+.global push_front_asm
+push_front_asm:
+    # Prologue: guardem registres que preservarem
     pushq   %rbx
     pushq   %r12
     
-    # CARGAS ÚNICAS
-    movq    (%rdi), %rbx        # rbx = _valors (GUARDADO)
-    movl    12(%rdi), %r12d     # r12d = _ultim (GUARDADO)
-    movl    8(%rdi), %eax       # eax = _mida
+    # Càrrega dels membres de l'estructura Deque
+    # Estructura: _valors(0), _mida(8), _ultim(12)
+    movq    (%rdi), %rbx        # rbx = _valors (punter a l'array)
+    movl    12(%rdi), %r12d     # r12d = _ultim (nombre d'elements)
+    movl    8(%rdi), %eax       # eax = _mida (capacitat màxima)
     
-    # Verificar capacidad (1 acceso)
-    leal    -1(%rax), %eax      # eax = _mida - 1
-    cmpl    %eax, %r12d
-    jge     .end                # Salir si no hay espacio
+    # Verificació de capacitat: if (_ultim >= _mida - 1) return
+    decl    %eax                # eax = _mida - 1
+    cmpl    %eax, %r12d         # compara _ultim amb _mida-1
+    jge     .final_push_front   # si _ultim >= _mida-1, surt
     
-    # Si no hay elementos, saltar a insertar
-    testl   %r12d, %r12d
-    jz      .insert
+    # Si el deque està buit, inserim directament
+    testl   %r12d, %r12d        # verifica si _ultim == 0
+    jz      .inserir_push_front
     
-    # USAR REGISTRO PARA ÍNDICE (NO MEMORIA)
-    movl    %r12d, %ecx         # ecx = i = _ultim
+    # Preparació per al bucle de desplaçament
+    movl    %r12d, %ecx         # ecx = i = _ultim (comptador)
+    leaq    (%rbx,%rcx,4), %rdx # rdx = _valors + i*4 (posició actual)
     
-    # PRE-CALCULAR DIRECCION BASE
-    leaq    (%rbx,%rcx,4), %rdx # rdx = _valors + i*4 (posición destino)
-    
-.loop:
-    # CARGAR _valors[i-1] DIRECTO
+.bucle_push_front:
+    # Desplaça element: _valors[i] = _valors[i-1]
     movl    -4(%rdx), %eax      # eax = _valors[i-1]
     movl    %eax, (%rdx)        # _valors[i] = eax
     
-    # ACTUALIZAR DIRECCIÓN (más eficiente que recalcular)
-    subq    $4, %rdx            # rdx apunta a siguiente elemento
+    # Moure's a l'element anterior
+    subq    $4, %rdx            # rdx apunta ara a _valors[i-1]
     
-    loop    .loop               # DEC ecx y salta si ecx != 0
+    # Verificar si hem arribat al principi
+    cmpq    %rbx, %rdx          # compara amb _valors[0]
+    ja      .bucle_push_front   # continua si rdx > rbx
     
-.insert:
-    # Insertar k al principio (1 acceso)
-    movl    (%rsi), %eax        # eax = k
-    movl    %eax, (%rbx)        # _valors[0] = k
+.inserir_push_front:
+    # Inserir nou element al davant
+    movl    %esi, (%rbx)        # _valors[0] = k
     
-    # Incrementar _ultim (1 acceso)
-    leal    1(%r12d), %eax      # eax = _ultim + 1
-    movl    %eax, 12(%rdi)      # Guardar nuevo _ultim
+    # Incrementar _ultim
+    incl    %r12d               # _ultim++
+    movl    %r12d, 12(%rdi)     # guarda el nou valor a memòria
     
-.end:
+.final_push_front:
+    # Epilogue: restaurar registres
     popq    %r12
     popq    %rbx
     ret
 
-
-
-
-
-#MOLT es eficient
-_ZN5Deque10push_frontERKi_ultra:
-    # NO PROLOGUE para menos overhead (trust caller-saved regs)
-    # rdi = this, esi = k (ya viene en registro, no puntero!)
+# =================================================================
+# Funció: push_back_asm
+# Paràmetres: rdi = punter a Deque, esi = valor k
+# Descripció: Insereix un element al darrere del deque
+# =================================================================
+.global push_back_asm
+push_back_asm:
+    pushq   %rbx
     
-    # Cargar todo de una vez
-    movq    (%rdi), %r8         # r8 = _valors
-    movl    12(%rdi), %ecx      # ecx = _ultim
-    movl    8(%rdi), %eax       # eax = _mida
+    # Càrrega dels membres necessaris
+    movq    (%rdi), %rbx        # rbx = _valors
+    movl    12(%rdi), %eax      # eax = _ultim
+    movl    8(%rdi), %ecx       # ecx = _mida
     
-    # Verificar espacio rápido
-    leal    -1(%rax), %eax
-    cmpl    %eax, %ecx
-    jge     .ultra_end
+    # Verificació de capacitat: if (_ultim >= _mida) return
+    cmpl    %ecx, %eax          # compara _ultim amb _mida
+    jge     .final_push_back    # si _ultim >= _mida, surt
     
-    # Si vacío, insertar directamente
-    testl   %ecx, %ecx
-    jz      .ultra_insert
-    
-    # LOOP UNROLLING 4x (más rápido para arrays grandes)
-    movl    %ecx, %edx
-    shrl    $2, %edx            # edx = count / 4
-    jz      .small_shift
-    
-.unroll_loop:
-    # Mover 4 elementos de una vez
-    movl    -16(%r8,%rcx,4), %eax   # _valors[i-4]
-    movl    -12(%r8,%rcx,4), %r9d   # _valors[i-3]
-    movl    -8(%r8,%rcx,4), %r10d   # _valors[i-2]
-    movl    -4(%r8,%rcx,4), %r11d   # _valors[i-1]
-    
-    movl    %eax, (%r8,%rcx,4)      # _valors[i] = ...
-    movl    %r9d, 4(%r8,%rcx,4)     # _valors[i+1] = ...
-    movl    %r10d, 8(%r8,%rcx,4)    # _valors[i+2] = ...
-    movl    %r11d, 12(%r8,%rcx,4)   # _valors[i+3] = ...
-    
-    subl    $4, %ecx                # i -= 4
-    decl    %edx
-    jnz     .unroll_loop
-
-.small_shift:
-    # Elementos restantes (0-3)
-    andl    $3, %ecx
-    jz      .ultra_insert
-    
-.remainder:
-    movl    -4(%r8,%rcx,4), %eax
-    movl    %eax, (%r8,%rcx,4)
-    decl    %ecx
-    jnz     .remainder
-
-.ultra_insert:
-    # Insertar
-    movl    %esi, (%r8)
+    # Inserir al final: _valors[_ultim] = k
+    movl    %esi, (%rbx,%rax,4) # accés indexat: base + índex*4
     
     # Incrementar _ultim
-    movl    12(%rdi), %eax
-    incl    %eax
-    movl    %eax, 12(%rdi)
-
-.ultra_end:
+    incl    %eax                # _ultim++
+    movl    %eax, 12(%rdi)      # guarda a memòria
+    
+.final_push_back:
+    popq    %rbx
     ret
 
-
-
-
-
-#MAXIMO rendimiento
-
-_ZN5Deque10push_frontERKi_sse:
-    # rdi = this, esi = k
+# =================================================================
+# Funció: pop_front_asm
+# Paràmetres: rdi = punter a Deque
+# Descripció: Elimina l'element del davant del deque
+# =================================================================
+.global pop_front_asm
+pop_front_asm:
+    pushq   %rbx
+    pushq   %r12
     
-    # Cargar datos esenciales
-    movq    (%rdi), %r8         # _valors
-    movl    12(%rdi), %ecx      # _ultim
-    movl    8(%rdi), %eax       # _mida
+    # Càrrega dels membres
+    movq    (%rdi), %rbx        # rbx = _valors (NO es modifica!)
+    movl    12(%rdi), %r12d     # r12d = _ultim
     
-    # Check rápido
-    leal    -1(%rax), %eax
-    cmpl    %eax, %ecx
-    jge     .sse_end
+    # Verificar si el deque està buit
+    testl   %r12d, %r12d        # _ultim == 0?
+    jz      .final_pop_front    # si buit, surt
     
-    # Si vacío
-    testl   %ecx, %ecx
-    jz      .sse_insert
+    # Cas especial: només un element
+    cmpl    $1, %r12d
+    je      .decrementar_pop_front
     
-    # Usar SSE para bloques de 4 elementos
-    movl    %ecx, %edx
-    shrl    $2, %edx            # número de bloques SSE
-    jz      .sse_small
+    # Preparar per al desplaçament
+    leal    -1(%r12d), %ecx     # ecx = _ultim - 1 (elements a moure)
+    leaq    4(%rbx), %rdx       # rdx = _valors + 1 (origen: segon element)
+    xorl    %eax, %eax          # eax = 0 (índex destí)
     
-.sse_loop:
-    # Calcular offset
-    movl    %ecx, %eax
-    shll    $4, %eax            # eax = i * 16 (bytes)
+.bucle_pop_front:
+    # Verificar si hem mogut tots els elements
+    cmpl    %ecx, %eax          # i < _ultim-1?
+    jge     .decrementar_pop_front
     
-    # Cargar 4 ints con SSE (alineados si es posible)
-    movdqu  -16(%r8,%rax), %xmm0   # _valors[i-4..i-1]
-    movdqu  %xmm0, (%r8,%rax)      # _valors[i..i+3]
+    # Desplaça: _valors[i] = _valors[i+1]
+    movl    (%rdx,%rax,4), %r8d # r8d = _valors[i+1]
+    movl    %r8d, (%rbx,%rax,4) # _valors[i] = _valors[i+1]
     
-    subl    $4, %ecx
-    decl    %edx
-    jnz     .sse_loop
-
-.sse_small:
-    # Procesar restantes (0-3)
-    andl    $3, %ecx
-    jz      .sse_insert
+    # Incrementar índex
+    incl    %eax                # i++
+    jmp     .bucle_pop_front
     
-.sse_remainder:
-    movl    -4(%r8,%rcx,4), %eax
-    movl    %eax, (%r8,%rcx,4)
-    decl    %ecx
-    jnz     .sse_remainder
-
-.sse_insert:
-    movl    %esi, (%r8)
+.decrementar_pop_front:
+    # Decrementar _ultim
+    decl    %r12d               # _ultim--
+    movl    %r12d, 12(%rdi)     # guarda a memòria
     
-    # Actualizar _ultim
-    movl    12(%rdi), %eax
-    incl    %eax
-    movl    %eax, 12(%rdi)
-
-.sse_end:
+.final_pop_front:
+    popq    %r12
+    popq    %rbx
     ret
+
+# =================================================================
+# Funció: pop_back_asm
+# Paràmetres: rdi = punter a Deque
+# Descripció: Elimina l'element del darrere del deque
+# =================================================================
+.global pop_back_asm
+pop_back_asm:
+    pushq   %rbx
+    
+    # Càrrega de _ultim
+    movl    12(%rdi), %ebx      # ebx = _ultim
+    
+    # Verificar si el deque està buit
+    testl   %ebx, %ebx          # _ultim == 0?
+    jz      .final_pop_back     # si buit, surt
+    
+    # Decrementar _ultim (no cal esborrar físicament l'element)
+    decl    %ebx                # _ultim--
+    movl    %ebx, 12(%rdi)      # guarda a memòria
+    
+.final_pop_back:
+    popq    %rbx
+    ret
+
+# =================================================================
+# Funció: sum (exemple de funció simple)
+# Paràmetres: (int a, int b) passats per la pila (convenció antiga)
+# Retorna: a + b a eax
+# =================================================================
+.global sum
+sum:
+    pushq   %rbp
+    movq    %rsp, %rbp          # Enllaç dinàmic
+    movl    8(%rbp), %eax       # a -> eax
+    addl    12(%rbp), %eax      # b + eax -> eax
+    popq    %rbp                # Desfés enllaç
+    ret                         # retorna amb resultat a eax
